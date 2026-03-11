@@ -2,42 +2,63 @@
 QAdapt: Information-Theoretic Mixed-Precision Quantization for Hypergraph Neural Networks
 ==========================================================================================
 Single-file implementation — all equations from the paper in one place.
+Supports BOTH classification (IMDB, DBLP, ACM) and regression (Amazon, Yelp).
 
 USAGE:
-    # IMDB dataset (classification):
-    python qadapt.py --dataset imdb --data_path C:/IMDB
+------
+# Option A — provide your own data folder:
+    python qadapt.py --dataset imdb   --data_path /your/path/to/IMDB
+    python qadapt.py --dataset dblp   --data_path /your/path/to/DBLP
+    python qadapt.py --dataset acm    --data_path /your/path/to/ACM
+    python qadapt.py --dataset amazon --data_path /your/path/to/Amazon
+    python qadapt.py --dataset yelp   --data_path /your/path/to/Yelp
+    python qadapt.py --dataset all    --data_path /your/root/data/folder
 
-    # Synthetic regression (Amazon/Yelp style):
+# Option B — run without any data (auto-generates synthetic hypergraph):
+    python qadapt.py --dataset imdb
     python qadapt.py --dataset amazon
+    python qadapt.py --dataset all
 
-    # All datasets:
-    python qadapt.py --dataset all --data_path C:/IMDB
+# Limit rows for quick debug:
+    python qadapt.py --dataset imdb --data_path /your/path --max_rows 200
 
-    # Debug (limit rows):
-    python qadapt.py --dataset imdb --data_path C:/IMDB --max_rows 200
+DATA FOLDER EXPECTED FORMAT (per dataset):
+------------------------------------------
+  IMDB   (classification): user_movies.xlsx, movie_directors.xlsx,
+                            movie_actors.xlsx, movie_genres.xlsx
+  DBLP   (classification): paper_author.xlsx / paper_author.csv,
+                            paper_conf.xlsx   / paper_conf.csv
+  ACM    (classification): paper_author.xlsx / paper_author.csv,
+                            paper_subject.xlsx / paper_subject.csv
+  Amazon (regression)    : user_product.xlsx / user_product.csv
+                           (must contain: userID, productID, rating)
+  Yelp   (regression)    : user_business.xlsx / user_business.csv
+                           (must contain: userID, businessID, rating)
 
-PAPER EQUATIONS IMPLEMENTED:
-    Eq. hgnn_conv   : X^(l+1) = sigma(D_v^{-1/2} H W_e D_e^{-1} H^T D_v^{-1/2} X^(l) Theta)
-    Eq. info_density: rho_{i,e} = IC(x_i, h_e) * SW(i,e)
-    Eq. InfoNCE     : hat_I(x_i; h_e) = log exp(f(x_i,h_e)) / mean_j exp(f(x_i,h_ej'))
-    Eq. SW          : SW(i,e) = sum_k alpha_k phi_k(i) * 1_e(i)
-    Eq. A_hyper     : softmax((P_e x_i)^T (P_e x_j)/sqrt(d) + alpha*log(rho+eps))
-    Eq. A_node      : softmax((W x_i)^T (W x_j)/sqrt(d) + alpha*log(rho_bar+eps))
-    Eq. SpectralFus : A_final = Phi diag(omega) Phi^T (A_hyper + A_node)
-    Eq. Fisher      : S_{ij} = EMA((dL/dA_{ij})^2, beta=0.99)
-    Eq. Structure   : Structure(i,j) = sum_k gamma_k phi_k(i) phi_k(j)
-    Eq. BitWidth    : MLP_alloc([S^Fisher; rho; Structure; phi_local; s_global])
-    Eq. Gumbel      : tau(t) = max(0.1, 2.0 * 0.95^(t/100)), hard after epoch 200
-    Eq. Q_adaptive  : sum_{b in {4,8,16}} beta^(b) * Q(A; b, s^(b))
-    Eq. Loss        : L = L_task + lambda1*L_compression + lambda2*L_spectral
+  If a file is missing, synthetic data is used automatically — no crash.
+  CSV and XLSX are both supported."""
 
-METRICS (Table 1 of paper):
-    Classification : Accuracy, F1 (macro), AUC (macro OvR)
-    Regression     : MAE, RMSE, R²
-    Efficiency     : Inference time (ms/batch), Compression ratio vs FP16
-    Theory         : Information Retention score, Spectral Preservation score
-    Statistics     : 5-fold CV, paired t-test (p<0.01), Cohen's d
-"""
+# PAPER EQUATIONS IMPLEMENTED:
+#   hgnn_conv   : X^(l+1) = sigma(D_v^{-1/2} H W_e D_e^{-1} H^T D_v^{-1/2} X^(l) Theta)
+#   info_density: rho_{i,e} = IC(x_i, h_e) * SW(i,e)
+#   InfoNCE     : hat_I(x_i; h_e) = log exp(f(xi,he)) / mean_j exp(f(xi,he_neg))
+#   SW          : SW(i,e) = sum_k alpha_k phi_k(i) * indicator_e(i)
+#   A_hyper     : softmax((P_e x_i)^T (P_e x_j)/sqrt(d) + alpha*log(rho+eps))
+#   A_node      : softmax((W x_i)^T (W x_j)/sqrt(d) + alpha*log(rho_bar+eps))
+#   SpectralFus : A_final = Phi diag(omega) Phi^T (A_hyper + A_node)
+#   Fisher      : S_{ij} = EMA((dL/dA_{ij})^2, beta=0.99)
+#   Structure   : Structure(i,j) = sum_k gamma_k phi_k(i) phi_k(j)
+#   BitWidth    : MLP_alloc([S_Fisher; rho; Structure; phi_local; s_global])
+#   Gumbel      : tau(t) = max(0.1, 2.0 * 0.95^(t/100)), hard after epoch 200
+#   Q_adaptive  : sum_{b in {4,8,16}} beta^(b) * Q(A; b, s^(b))
+#   Loss        : L = L_task + lambda1*L_compression + lambda2*L_spectral
+
+# METRICS (Table 1 of paper):
+#   Classification : Accuracy, F1 (macro), AUC (macro OvR)
+#   Regression     : MAE, RMSE, R2
+#   Efficiency     : Inference time (ms/batch), Compression ratio vs FP16
+#   Theory         : Information Retention score, Spectral Preservation score
+#   Statistics     : 5-fold CV, paired t-test (p<0.01), Cohen d
 
 # =============================================================================
 # IMPORTS
@@ -880,110 +901,360 @@ def print_summary_table(summary: dict, task: str):
 
 
 # =============================================================================
-# SECTION 10 — DATA LOADING
+# SECTION 10 — DATA LOADING  (universal: all 5 datasets + synthetic fallback)
 # =============================================================================
 
-def load_imdb(folder_path: str, max_rows=None, feature_dim=64):
-    """Load IMDB xlsx files and build hypergraph H, features X, labels."""
-    files = {
-        'user_movies.xlsx':    ['userID', 'movieID', 'rating'],
-        'movie_directors.xlsx':['movieID', 'directorID'],
-        'movie_actors.xlsx':   ['movieID', 'actorID'],
-        'movie_genres.xlsx':   ['movieID', 'genreID'],
-    }
-    data = {}
-    for fname, cols in files.items():
-        path = os.path.join(folder_path, fname)
+def _read_file(folder: str, candidates: list, cols: list,
+               max_rows=None) -> pd.DataFrame:
+    """
+    Try to load the first matching file (xlsx or csv) from a list of candidates.
+    Returns empty DataFrame if nothing found.
+    """
+    for fname in candidates:
+        path = os.path.join(folder, fname)
         if not os.path.exists(path):
-            data[fname] = pd.DataFrame(columns=cols)
             continue
-        df = pd.read_excel(path, usecols=cols, nrows=max_rows)
-        for c in cols:
-            if c in df.columns:
-                df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0).astype(int)
-        data[fname] = df
-        print(f"  Loaded {len(df)} rows from {fname}")
-
-    # Build entity index
-    all_ents, etype, hyperedges = set(), {}, []
-    genre_map, str_ctr = {}, defaultdict(int)
-
-    def eid(kind, raw):
         try:
-            v = int(float(raw))
-        except:
-            s = str(raw)
-            if s not in str_ctr: str_ctr[s] = len(str_ctr)
-            v = str_ctr[s]
-        return f"{kind}_{v}"
+            if fname.endswith('.csv'):
+                df = pd.read_csv(path, usecols=lambda c: c in cols, nrows=max_rows)
+            else:
+                df = pd.read_excel(path, usecols=lambda c: c in cols, nrows=max_rows)
+            # Keep only the columns we need (some files may have extras)
+            df = df[[c for c in cols if c in df.columns]]
+            for c in df.columns:
+                df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
+            print(f"  Loaded {len(df):>6} rows  ←  {fname}")
+            return df
+        except Exception as e:
+            print(f"  [warn] Could not read {fname}: {e}")
+    return pd.DataFrame(columns=cols)
 
-    for _, row in data['user_movies.xlsx'].iterrows():
-        u, mv = eid('user', row['userID']), eid('movie', row['movieID'])
-        all_ents |= {u, mv}; etype[u] = 'user'; etype[mv] = 'movie'
-        hyperedges.append([u, mv])
 
-    for _, row in data['movie_directors.xlsx'].iterrows():
-        mv, di = eid('movie', row['movieID']), eid('director', row['directorID'])
-        all_ents |= {mv, di}; etype[mv] = 'movie'; etype[di] = 'director'
-        hyperedges.append([mv, di])
-
-    for _, row in data['movie_actors.xlsx'].iterrows():
-        mv, ac = eid('movie', row['movieID']), eid('actor', row['actorID'])
-        all_ents |= {mv, ac}; etype[mv] = 'movie'; etype[ac] = 'actor'
-        hyperedges.append([mv, ac])
-
-    genre_df = data['movie_genres.xlsx']
-    uniq_g   = sorted(genre_df['genreID'].dropna().unique().tolist())
-    g2idx    = {g: i for i, g in enumerate(uniq_g)}
-    for _, row in genre_df.iterrows():
-        mv_id, gn_id = int(float(row['movieID'])), int(float(row['genreID']))
-        mv, ge = eid('movie', mv_id), eid('genre', gn_id)
-        all_ents |= {mv, ge}; etype[mv] = 'movie'; etype[ge] = 'genre'
-        hyperedges.append([mv, ge])
-        if mv_id not in genre_map:
-            genre_map[mv_id] = g2idx.get(gn_id, 0)
-
-    entity_list = sorted(all_ents)
-    e2idx       = {e: i for i, e in enumerate(entity_list)}
-    n, m        = len(entity_list), len(hyperedges)
+def _build_hypergraph(hyperedges: list, entity_types: dict,
+                       feature_dim: int, seed: int = 42):
+    """
+    Convert a list of hyperedges (each = list of entity strings) into
+    incidence matrix H, random feature matrix X, and entity index.
+    """
+    all_ents    = sorted({e for edge in hyperedges for e in edge})
+    e2idx       = {e: i for i, e in enumerate(all_ents)}
+    n, m        = len(all_ents), len(hyperedges)
 
     H = np.zeros((n, m), dtype=np.float32)
-    for eid_idx, members in enumerate(hyperedges):
-        for e in members:
-            if e in e2idx:
-                H[e2idx[e], eid_idx] = 1.0
+    for eid, members in enumerate(hyperedges):
+        for ent in members:
+            if ent in e2idx:
+                H[e2idx[ent], eid] = 1.0
 
-    np.random.seed(42)
-    te  = {t: np.random.randn(feature_dim) for t in ['movie','user','director','actor','genre']}
-    X   = np.random.randn(n, feature_dim).astype(np.float32)
-    for i, ent in enumerate(entity_list):
-        X[i] += 0.5 * te.get(etype[ent], np.zeros(feature_dim))
+    rng         = np.random.default_rng(seed)
+    unique_types = list(set(entity_types.values()))
+    type_embeds  = {t: rng.standard_normal(feature_dim) for t in unique_types}
+    X            = rng.standard_normal((n, feature_dim)).astype(np.float32)
+    for i, ent in enumerate(all_ents):
+        t    = entity_types.get(ent, 'unknown')
+        X[i] += 0.5 * type_embeds.get(t, np.zeros(feature_dim))
 
+    return H, X, all_ents, e2idx
+
+
+def _safe_int(val):
+    try:
+        return int(float(val))
+    except:
+        return str(val)
+
+
+# ─── IMDB (classification: predict movie genre) ───────────────────────────
+
+def load_imdb(folder: str, max_rows=None, feature_dim=64):
+    """
+    Files needed (xlsx or csv):
+        user_movies    : userID, movieID, rating
+        movie_directors: movieID, directorID
+        movie_actors   : movieID, actorID
+        movie_genres   : movieID, genreID   ← label source
+    """
+    df_um = _read_file(folder, ['user_movies.xlsx',    'user_movies.csv'],
+                       ['userID','movieID','rating'],   max_rows)
+    df_md = _read_file(folder, ['movie_directors.xlsx','movie_directors.csv'],
+                       ['movieID','directorID'],        max_rows)
+    df_ma = _read_file(folder, ['movie_actors.xlsx',   'movie_actors.csv'],
+                       ['movieID','actorID'],           max_rows)
+    df_mg = _read_file(folder, ['movie_genres.xlsx',   'movie_genres.csv'],
+                       ['movieID','genreID'],           max_rows)
+
+    etype, hedges, genre_map = {}, [], {}
+
+    def add(a, at, b, bt):
+        etype[a] = at; etype[b] = bt; hedges.append([a, b])
+
+    for _, r in df_um.iterrows():
+        add(f"user_{_safe_int(r['userID'])}", 'user',
+            f"movie_{_safe_int(r['movieID'])}", 'movie')
+    for _, r in df_md.iterrows():
+        add(f"movie_{_safe_int(r['movieID'])}", 'movie',
+            f"director_{_safe_int(r['directorID'])}", 'director')
+    for _, r in df_ma.iterrows():
+        add(f"movie_{_safe_int(r['movieID'])}", 'movie',
+            f"actor_{_safe_int(r['actorID'])}", 'actor')
+
+    uniq_g = sorted(df_mg['genreID'].dropna().unique().tolist())
+    g2idx  = {g: i for i, g in enumerate(uniq_g)}
+    for _, r in df_mg.iterrows():
+        mid, gid = _safe_int(r['movieID']), _safe_int(r['genreID'])
+        add(f"movie_{mid}", 'movie', f"genre_{gid}", 'genre')
+        if mid not in genre_map and gid in g2idx:
+            genre_map[mid] = g2idx[gid]
+
+    if not hedges:
+        print("  [warn] No IMDB data found — using synthetic fallback.")
+        return make_synthetic(task='classification')
+
+    H, X, ents, e2idx = _build_hypergraph(hedges, etype, feature_dim)
+    n = len(ents)
     labels = np.full(n, -1, dtype=np.int64)
-    for i, ent in enumerate(entity_list):
-        if etype[ent] == 'movie':
+    for i, ent in enumerate(ents):
+        if etype.get(ent) == 'movie':
             try:
-                mid = int(ent.split('_')[1])
+                mid = _safe_int(ent.split('_')[1])
                 if mid in genre_map:
                     labels[i] = genre_map[mid]
             except: pass
 
-    print(f"  Hypergraph: {n} nodes, {m} hyperedges, {len(uniq_g)} classes")
-    return H, X, np.ones(m, dtype=np.float32), labels, len(uniq_g)
+    num_classes = len(uniq_g) if uniq_g else 1
+    print(f"  Hypergraph: {n} nodes, {H.shape[1]} hyperedges, "
+          f"{num_classes} classes  [classification]")
+    return H, X, np.ones(H.shape[1], dtype=np.float32), labels, num_classes
 
+
+# ─── DBLP (classification: predict paper conference/area) ─────────────────
+
+def load_dblp(folder: str, max_rows=None, feature_dim=64):
+    """
+    Files needed (xlsx or csv):
+        paper_author: paperID, authorID
+        paper_conf  : paperID, confID   ← label source
+    """
+    df_pa = _read_file(folder, ['paper_author.xlsx','paper_author.csv'],
+                       ['paperID','authorID'], max_rows)
+    df_pc = _read_file(folder, ['paper_conf.xlsx', 'paper_conf.csv'],
+                       ['paperID','confID'],   max_rows)
+
+    etype, hedges, label_map = {}, [], {}
+
+    for _, r in df_pa.iterrows():
+        p, a = f"paper_{_safe_int(r['paperID'])}", f"author_{_safe_int(r['authorID'])}"
+        etype[p] = 'paper'; etype[a] = 'author'; hedges.append([p, a])
+
+    uniq_c = sorted(df_pc['confID'].dropna().unique().tolist())
+    c2idx  = {c: i for i, c in enumerate(uniq_c)}
+    for _, r in df_pc.iterrows():
+        pid, cid = _safe_int(r['paperID']), _safe_int(r['confID'])
+        p, c = f"paper_{pid}", f"conf_{cid}"
+        etype[p] = 'paper'; etype[c] = 'conf'; hedges.append([p, c])
+        if pid not in label_map and cid in c2idx:
+            label_map[pid] = c2idx[cid]
+
+    if not hedges:
+        print("  [warn] No DBLP data found — using synthetic fallback.")
+        return make_synthetic(task='classification')
+
+    H, X, ents, _ = _build_hypergraph(hedges, etype, feature_dim)
+    n      = len(ents)
+    labels = np.full(n, -1, dtype=np.int64)
+    for i, ent in enumerate(ents):
+        if etype.get(ent) == 'paper':
+            try:
+                pid = _safe_int(ent.split('_')[1])
+                if pid in label_map: labels[i] = label_map[pid]
+            except: pass
+
+    num_classes = max(len(uniq_c), 1)
+    print(f"  Hypergraph: {n} nodes, {H.shape[1]} hyperedges, "
+          f"{num_classes} classes  [classification]")
+    return H, X, np.ones(H.shape[1], dtype=np.float32), labels, num_classes
+
+
+# ─── ACM (classification: predict paper subject) ──────────────────────────
+
+def load_acm(folder: str, max_rows=None, feature_dim=64):
+    """
+    Files needed (xlsx or csv):
+        paper_author : paperID, authorID
+        paper_subject: paperID, subjectID  ← label source
+    """
+    df_pa = _read_file(folder, ['paper_author.xlsx', 'paper_author.csv'],
+                       ['paperID','authorID'],   max_rows)
+    df_ps = _read_file(folder, ['paper_subject.xlsx','paper_subject.csv'],
+                       ['paperID','subjectID'],  max_rows)
+
+    etype, hedges, label_map = {}, [], {}
+
+    for _, r in df_pa.iterrows():
+        p, a = f"paper_{_safe_int(r['paperID'])}", f"author_{_safe_int(r['authorID'])}"
+        etype[p] = 'paper'; etype[a] = 'author'; hedges.append([p, a])
+
+    uniq_s = sorted(df_ps['subjectID'].dropna().unique().tolist())
+    s2idx  = {s: i for i, s in enumerate(uniq_s)}
+    for _, r in df_ps.iterrows():
+        pid, sid = _safe_int(r['paperID']), _safe_int(r['subjectID'])
+        p, s = f"paper_{pid}", f"subject_{sid}"
+        etype[p] = 'paper'; etype[s] = 'subject'; hedges.append([p, s])
+        if pid not in label_map and sid in s2idx:
+            label_map[pid] = s2idx[sid]
+
+    if not hedges:
+        print("  [warn] No ACM data found — using synthetic fallback.")
+        return make_synthetic(task='classification')
+
+    H, X, ents, _ = _build_hypergraph(hedges, etype, feature_dim)
+    n      = len(ents)
+    labels = np.full(n, -1, dtype=np.int64)
+    for i, ent in enumerate(ents):
+        if etype.get(ent) == 'paper':
+            try:
+                pid = _safe_int(ent.split('_')[1])
+                if pid in label_map: labels[i] = label_map[pid]
+            except: pass
+
+    num_classes = max(len(uniq_s), 1)
+    print(f"  Hypergraph: {n} nodes, {H.shape[1]} hyperedges, "
+          f"{num_classes} classes  [classification]")
+    return H, X, np.ones(H.shape[1], dtype=np.float32), labels, num_classes
+
+
+# ─── AMAZON (regression: predict product rating) ──────────────────────────
+
+def load_amazon(folder: str, max_rows=None, feature_dim=64):
+    """
+    Files needed (xlsx or csv):
+        user_product: userID, productID, rating  ← rating is the regression target
+    """
+    df = _read_file(folder,
+                    ['user_product.xlsx','user_product.csv',
+                     'ratings.xlsx',     'ratings.csv'],
+                    ['userID','productID','rating'], max_rows)
+
+    if df.empty:
+        print("  [warn] No Amazon data found — using synthetic fallback.")
+        return make_synthetic(task='regression')
+
+    etype, hedges, rating_map = {}, [], {}
+    for _, r in df.iterrows():
+        u  = f"user_{_safe_int(r['userID'])}"
+        p  = f"product_{_safe_int(r['productID'])}"
+        etype[u] = 'user'; etype[p] = 'product'
+        hedges.append([u, p])
+        pid = _safe_int(r['productID'])
+        if pid not in rating_map:
+            rating_map[pid] = float(r.get('rating', 0.0))
+
+    H, X, ents, _ = _build_hypergraph(hedges, etype, feature_dim)
+    n      = len(ents)
+    labels = np.zeros(n, dtype=np.float32)
+    for i, ent in enumerate(ents):
+        if etype.get(ent) == 'product':
+            try:
+                pid = _safe_int(ent.split('_')[1])
+                labels[i] = rating_map.get(pid, 0.0)
+            except: pass
+
+    print(f"  Hypergraph: {n} nodes, {H.shape[1]} hyperedges  [regression]")
+    return H, X, np.ones(H.shape[1], dtype=np.float32), labels, 1
+
+
+# ─── YELP (regression: predict business rating) ───────────────────────────
+
+def load_yelp(folder: str, max_rows=None, feature_dim=64):
+    """
+    Files needed (xlsx or csv):
+        user_business: userID, businessID, rating  ← rating is the regression target
+    """
+    df = _read_file(folder,
+                    ['user_business.xlsx','user_business.csv',
+                     'reviews.xlsx',      'reviews.csv'],
+                    ['userID','businessID','rating'], max_rows)
+
+    if df.empty:
+        print("  [warn] No Yelp data found — using synthetic fallback.")
+        return make_synthetic(task='regression')
+
+    etype, hedges, rating_map = {}, [], {}
+    for _, r in df.iterrows():
+        u  = f"user_{_safe_int(r['userID'])}"
+        b  = f"business_{_safe_int(r['businessID'])}"
+        etype[u] = 'user'; etype[b] = 'business'
+        hedges.append([u, b])
+        bid = _safe_int(r['businessID'])
+        if bid not in rating_map:
+            rating_map[bid] = float(r.get('rating', 0.0))
+
+    H, X, ents, _ = _build_hypergraph(hedges, etype, feature_dim)
+    n      = len(ents)
+    labels = np.zeros(n, dtype=np.float32)
+    for i, ent in enumerate(ents):
+        if etype.get(ent) == 'business':
+            try:
+                bid = _safe_int(ent.split('_')[1])
+                labels[i] = rating_map.get(bid, 0.0)
+            except: pass
+
+    print(f"  Hypergraph: {n} nodes, {H.shape[1]} hyperedges  [regression]")
+    return H, X, np.ones(H.shape[1], dtype=np.float32), labels, 1
+
+
+# ─── Synthetic fallback ────────────────────────────────────────────────────
 
 def make_synthetic(n_nodes=500, n_he=200, feat_dim=64,
                     n_classes=5, task='classification', seed=42):
+    """Auto-generated hypergraph when real data is unavailable."""
     rng = np.random.default_rng(seed)
     H   = np.zeros((n_nodes, n_he), dtype=np.float32)
     for e, s in enumerate(rng.integers(2, 10, size=n_he)):
         H[rng.choice(n_nodes, s, replace=False), e] = 1.0
     X   = rng.standard_normal((n_nodes, feat_dim)).astype(np.float32)
     W_e = np.ones(n_he, dtype=np.float32)
-    lbl = rng.integers(0, n_classes, n_nodes).astype(np.int64) \
-          if task == 'classification' \
-          else rng.standard_normal(n_nodes).astype(np.float32)
-    return H, X, W_e, lbl, n_classes if task == 'classification' else 1
+    if task == 'classification':
+        lbl = rng.integers(0, n_classes, n_nodes).astype(np.int64)
+        nc  = n_classes
+    else:
+        lbl = rng.standard_normal(n_nodes).astype(np.float32)
+        nc  = 1
+    print(f"  Synthetic hypergraph: {n_nodes} nodes, {n_he} hyperedges  [{task}]")
+    return H, X, W_e, lbl, nc
+
+
+# ─── Unified loader ────────────────────────────────────────────────────────
+
+LOADERS = {
+    'imdb':   load_imdb,
+    'dblp':   load_dblp,
+    'acm':    load_acm,
+    'amazon': load_amazon,
+    'yelp':   load_yelp,
+}
+
+def load_dataset(name: str, data_path: str = None,
+                  max_rows=None, feature_dim=64):
+    """
+    Universal entry point.
+    If data_path is None or the folder does not exist, falls back to synthetic.
+    """
+    loader = LOADERS.get(name)
+    if loader is None:
+        raise ValueError(f"Unknown dataset '{name}'. "
+                         f"Choose from: {list(LOADERS.keys())}")
+
+    if data_path and os.path.isdir(data_path):
+        print(f"  Reading from: {data_path}")
+        return loader(data_path, max_rows=max_rows, feature_dim=feature_dim)
+    else:
+        if data_path:
+            print(f"  [warn] '{data_path}' not found — using synthetic data.")
+        else:
+            print(f"  No --data_path given — using synthetic data.")
+        task = DATASET_CONFIGS[name]['task']
+        return make_synthetic(task=task, feat_dim=feature_dim)
 
 
 # =============================================================================
@@ -1164,24 +1435,34 @@ DATASET_CONFIGS = {
 
 def run_dataset(name, args):
     print(f"\n{'='*70}\n  Dataset: {name.upper()}\n{'='*70}")
-    cfg = DATASET_CONFIGS.get(name, DATASET_CONFIGS['imdb'])
+    cfg  = DATASET_CONFIGS.get(name, DATASET_CONFIGS['imdb'])
     task = cfg['task']
 
-    if name == 'imdb' and os.path.exists(args.data_path):
-        H, X, W_e, labels, num_classes = load_imdb(
-            args.data_path, max_rows=args.max_rows, feature_dim=args.feature_dim
-        )
-    else:
-        H, X, W_e, labels, num_classes = make_synthetic(
-            n_nodes=args.n_nodes, n_he=args.n_hyperedges,
-            feat_dim=args.feature_dim,
-            n_classes=5 if task == 'classification' else 1,
-            task=task
-        )
+    # Resolve per-dataset subfolder automatically if --data_path is a root folder
+    # e.g.  --data_path /data  →  tries /data/IMDB, /data/imdb, /data directly
+    folder = None
+    if args.data_path:
+        candidates = [
+            args.data_path,
+            os.path.join(args.data_path, name.upper()),
+            os.path.join(args.data_path, name),
+            os.path.join(args.data_path, name.capitalize()),
+        ]
+        for c in candidates:
+            if os.path.isdir(c):
+                folder = c
+                break
 
-    valid = np.where(labels >= 0)[0] if task == 'classification' else np.arange(len(labels))
+    H, X, W_e, labels, num_classes = load_dataset(
+        name, data_path=folder,
+        max_rows=args.max_rows, feature_dim=args.feature_dim
+    )
+
     feat_dim   = X.shape[1]
     output_dim = num_classes if task == 'classification' else 1
+    valid      = (np.where(labels >= 0)[0]
+                  if task == 'classification'
+                  else np.arange(len(labels)))
 
     print(f"\n  Running 5-fold cross-validation ...")
     qa_res, bl_res = run_five_fold_cv(
@@ -1195,15 +1476,47 @@ def run_dataset(name, args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='QAdapt — single-file experiment runner')
-    parser.add_argument('--dataset',      type=str, default='imdb',
-                        choices=['imdb','dblp','acm','amazon','yelp','all'])
-    parser.add_argument('--data_path',    type=str, default='C:/IMDB')
-    parser.add_argument('--max_rows',     type=int, default=None)
-    parser.add_argument('--feature_dim',  type=int, default=64)
-    parser.add_argument('--n_nodes',      type=int, default=500)
-    parser.add_argument('--n_hyperedges', type=int, default=200)
-    parser.add_argument('--seed',         type=int, default=42)
+    parser = argparse.ArgumentParser(
+        description='QAdapt — single-file experiment runner',
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog="""
+Examples:
+  # With real data
+  python qadapt.py --dataset imdb   --data_path /data/IMDB
+  python qadapt.py --dataset amazon --data_path /data/Amazon
+  python qadapt.py --dataset all    --data_path /data
+
+  # Without data (synthetic fallback — no crash)
+  python qadapt.py --dataset imdb
+  python qadapt.py --dataset all
+
+  # Quick debug
+  python qadapt.py --dataset imdb --data_path /data/IMDB --max_rows 200
+        """
+    )
+    parser.add_argument('--dataset',
+                        type=str, default='imdb',
+                        choices=['imdb','dblp','acm','amazon','yelp','all'],
+                        help='Dataset to run (default: imdb)')
+    parser.add_argument('--data_path',
+                        type=str, default=None,
+                        help='Path to dataset folder (optional — '
+                             'uses synthetic data if not provided or folder missing)')
+    parser.add_argument('--max_rows',
+                        type=int, default=None,
+                        help='Limit rows per file for quick debugging')
+    parser.add_argument('--feature_dim',
+                        type=int, default=64,
+                        help='Node feature dimension (default: 64)')
+    parser.add_argument('--n_nodes',
+                        type=int, default=500,
+                        help='Nodes for synthetic datasets (default: 500)')
+    parser.add_argument('--n_hyperedges',
+                        type=int, default=200,
+                        help='Hyperedges for synthetic datasets (default: 200)')
+    parser.add_argument('--seed',
+                        type=int, default=42,
+                        help='Random seed (default: 42)')
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
@@ -1212,12 +1525,36 @@ def main():
     datasets = ['imdb','dblp','acm','amazon','yelp'] \
                if args.dataset == 'all' else [args.dataset]
 
+    print("\n" + "=" * 70)
+    print("  QAdapt: Information-Theoretic Hypergraph Quantization")
+    print(f"  Datasets : {datasets}")
+    print(f"  Data path: {args.data_path or '(none — synthetic fallback)'}")
+    print("=" * 70)
+
+    all_summaries = {}
     for ds in datasets:
         try:
-            run_dataset(ds, args)
+            all_summaries[ds] = run_dataset(ds, args)
         except Exception as e:
             print(f"  [ERROR] {ds}: {e}")
             import traceback; traceback.print_exc()
+
+    # Cross-dataset overview
+    if len(all_summaries) > 1:
+        print("\n\n" + "=" * 70)
+        print("  CROSS-DATASET OVERVIEW")
+        print("=" * 70)
+        print(f"{'Dataset':<10} {'Task':<16} {'Primary Metric':>16} "
+              f"{'Comp. Ratio':>13} {'Sig?':>6}")
+        print("-" * 70)
+        for ds, summ in all_summaries.items():
+            task = DATASET_CONFIGS[ds]['task']
+            pk   = 'acc' if task == 'classification' else 'mae'
+            if pk not in summ: continue
+            pm  = summ[pk]['qadapt_mean']
+            cr  = summ.get('comp_ratio', {}).get('qadapt_mean', 0.0)
+            sig = "Yes**" if summ[pk]['significant'] else "No"
+            print(f"{ds:<10} {task:<16} {pm:>16.4f} {cr:>13.2f} {sig:>6}")
 
 
 if __name__ == '__main__':
