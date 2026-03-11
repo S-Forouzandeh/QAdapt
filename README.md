@@ -1,7 +1,7 @@
 # QAdapt
 Information-Aware and Spectral-Preserving Quantization for Efficient Hypergraph Neural Networks
 
-# QAdapt: Information-Theoretic Mixed-Precision Quantization for Hypergraph Neural Networks
+# QAdapt: Information-Theoretic Adaptive Quantization for Hypergraph Neural Networks
 
 > **Faithful implementation of the full QAdapt theoretical framework.**  
 > Every equation from the paper is implemented exactly as described, correcting the misalignments present in the original prototype code.
