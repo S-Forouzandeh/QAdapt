@@ -1,20 +1,6 @@
 """
-QAdapt: Information-Theoretic Mixed-Precision Quantization for Hypergraph Neural Networks
+QAdapt: Information-Theoretic Adaptive Quantization for Hypergraph Neural Networks
 ==========================================================================================
-Corrected implementation — all 11 audit issues fixed:
-
-  [01][EQ-HGNN]      Added degree-normalisation: X_out = sigma(D_v^{-1/2} A_quant D_v^{-1/2} X Theta)
-  [02][GRAD-FLOW]    Removed .detach() from rho_IC — gradients now flow through rho to allocator
-  [03][SCALABILITY]  _node_attention now sparse: restricted to co-occurrence neighbourhood N^co(i,j)
-  [04][SILENT-SKIP]  Removed min(m,300) cap; _intra_hyperedge_attention processes ALL hyperedges
-                     via sparse loop with early-exit for singleton edges only
-  [05][FISHER]       Fisher EMA now per-entry (n,n) using actual gradients (dL/dA)^2 via hooks
-  [06][COMP-RATIO]   comp = 32 / avg_exp_bits  (FP32 reference, consistent with Table I 5.4x)
-  [07][LAMBDA]       Default lambda1=0.1, lambda2=0.05 (matching paper's chosen values)
-  [08][IR-METRIC]    IR = I(A_tilde)/I(A) via approximate MI ratio (not L1 norm)
-  [09][SP-METRIC]    SP = 1 - ||Lambda_tilde - Lambda||_2 / ||Lambda||_2 (eigenvalue-based)
-  [10][MI-UPDATE]    opt_mi.zero_grad() only when actually stepping (every 5 steps)
-  [11][BASELINE-OOM] BaselineHGNN uses sparse propagation — no dense n×n materialisation
 """
 
 import os, sys, time, math, argparse, warnings
